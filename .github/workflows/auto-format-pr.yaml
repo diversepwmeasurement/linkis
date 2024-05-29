@@ -1,69 +1,49 @@
-#
-# Licensed to the Apache Software Foundation (ASF) under one or more
-# contributor license agreements.  See the NOTICE file distributed with
-# this work for additional information regarding copyright ownership.
-# The ASF licenses this file to You under the Apache License, Version 2.0
-# (the "License"); you may not use this file except in compliance with
-# the License.  You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-
-name: Create Code Format Apply PullRequest
-
-on:
-  pull_request:
-    branches: [master,dev-*]
-    types: [closed]
-
 jobs:
   auto-code-format:
-    if: ${{ startsWith(github.repository, 'apache/') }}
-
-    runs-on: ubuntu-latest
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       SHA: ${{ github.sha }}
-
+    if: ${{ startsWith(github.repository, 'apache/') }}
+    runs-on: self-hosted
     steps:
+    - continue-on-error: true
+      if: github.event_name == 'pull_request' && github.event.action == 'closed' &&
+        github.event.pull_request.merged == true
+      name: Checkout
+      uses: actions/checkout@v3
+    - continue-on-error: true
+      name: Set up JDK 8
+      uses: actions/setup-java@v2
+      with:
+        distribution: adopt
+        java-version: '8'
+    - continue-on-error: true
+      name: Code Format Apply
+      run: ./mvnw spotless:apply
+    - continue-on-error: true
+      name: Create Pull Request
+      uses: peter-evans/create-pull-request@v4.1.1
+      with:
+        author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
+        base: ${{ env.BRANCH_NAME }}
+        body: '## Code format apply
 
-      - name: Checkout
-        uses: actions/checkout@v3
-        if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+          - run the result of mvn spotless:apply
 
-      - name: Set up JDK 8
-        uses: actions/setup-java@v2
-        with:
-          java-version: '8'
-          distribution: 'adopt'
+          '
+        branch: ${{ env.BRANCH_NAME }}-${{ env.SHA }}
+        commit-message: code format apply
+        committer: GitHub <noreply@github.com>
+        delete-branch: true
+        labels: 'code format
 
-      - name: Code Format Apply
-        run:
-          ./mvnw spotless:apply
+          automated pr
 
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v4.1.1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ env.BRANCH_NAME }}-${{ env.SHA }}
-          base: ${{ env.BRANCH_NAME }}
-          commit-message: code format apply
-          committer: GitHub <noreply@github.com>
-          author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
-          signoff: false
-          delete-branch: true
-
-          title: '[Code] Code format apply'
-          body: |
-            ## Code format apply
-            - run the result of mvn spotless:apply
-
-          labels: |
-            code format
-            automated pr
+          '
+        signoff: false
+        title: '[Code] Code format apply'
+        token: ${{ secrets.GITHUB_TOKEN }}
+name: Create Code Format Apply PullRequest
+on:
+  repository_dispatch:
+    types: trigger-ga___auto-format-pr.yaml
